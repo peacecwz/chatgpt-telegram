@@ -3,73 +3,75 @@ package session
 import (
 	"errors"
 	"fmt"
-	"log"
-	"sync"
-	"time"
-
 	"github.com/m1guelpf/chatgpt-telegram/src/ref"
 	"github.com/playwright-community/playwright-go"
+	"log"
+	"sync"
 )
 
-func GetSession() (string, error) {
+func GetSession() ([]*playwright.BrowserContextCookiesResult, error) {
 	runOptions := playwright.RunOptions{
 		Browsers: []string{"chromium"},
 		Verbose:  false,
 	}
 	err := playwright.Install(&runOptions)
 	if err != nil {
-		return "", errors.New(fmt.Sprintf("Couldn't install headless browser: %v", err))
+		return nil, errors.New(fmt.Sprintf("Couldn't install headless browser: %v", err))
 	}
 
 	pw, err := playwright.Run(&runOptions)
 	if err != nil {
-		return "", errors.New(fmt.Sprintf("Couldn't start headless browser: %v", err))
+		return nil, errors.New(fmt.Sprintf("Couldn't start headless browser: %v", err))
 	}
 
 	browser, page, err := launchBrowser(pw, "https://chat.openai.com", true)
 	if err != nil {
-		return "", errors.New(fmt.Sprintf("Couldn't launch headless browser: %v", err))
+		return nil, errors.New(fmt.Sprintf("Couldn't launch headless browser: %v", err))
 	}
 
 	for page.URL() != "https://chat.openai.com/chat" {
 		result := <-logIn(pw)
 		if result.Error != nil {
-			return "", errors.New(fmt.Sprintf("Couldn't log in: %v", result.Error))
+			return nil, errors.New(fmt.Sprintf("Couldn't log in: %v", result.Error))
 		}
 
-		authCookie := playwright.BrowserContextAddCookiesOptionsCookies{
-			Path:     ref.Of("/"),
-			Secure:   ref.Of(true),
-			HttpOnly: ref.Of(true),
-			Value:    ref.Of(result.SessionToken),
-			Domain:   ref.Of("chat.openai.com"),
-			SameSite: playwright.SameSiteAttributeLax,
-			Name:     ref.Of("__Secure-next-auth.session-token"),
-			Expires:  ref.Of(float64(time.Now().AddDate(0, 1, 0).Unix())),
+		var cookies []playwright.BrowserContextAddCookiesOptionsCookies
+
+		for _, c := range result.Cookies {
+			cookies = append(cookies, playwright.BrowserContextAddCookiesOptionsCookies{
+				Path:     ref.Of(c.Path),
+				Name:     ref.Of(c.Name),
+				Secure:   ref.Of(c.Secure),
+				Value:    ref.Of(c.Value),
+				SameSite: ref.Of(c.SameSite),
+				Expires:  ref.Of(c.Expires),
+				HttpOnly: ref.Of(c.HttpOnly),
+				Domain:   ref.Of(c.Domain),
+			})
 		}
 
-		if err := browser.AddCookies(authCookie); err != nil {
-			return "", errors.New(fmt.Sprintf("Couldn't save session to browser: %v", err))
+		if err := browser.AddCookies(cookies...); err != nil {
+			return nil, errors.New(fmt.Sprintf("Couldn't save session to browser: %v", err))
 		}
 
 		if _, err = page.Goto("https://chat.openai.com/chat"); err != nil {
-			return "", errors.New(fmt.Sprintf("Couldn't reload page: %v", err))
+			return nil, errors.New(fmt.Sprintf("Couldn't reload page: %v", err))
 		}
 	}
 
-	sessionToken, err := getSessionCookie(browser)
+	sessionCookie, err := getSessionCookie(browser)
 	if err != nil {
-		return "", errors.New(fmt.Sprintf("Couldn't get session token: %v", err))
+		return nil, errors.New(fmt.Sprintf("Couldn't get session token: %v", err))
 	}
 
 	if err := browser.Close(); err != nil {
-		return "", errors.New(fmt.Sprintf("Couldn't close headless browser: %v", err))
+		return nil, errors.New(fmt.Sprintf("Couldn't close headless browser: %v", err))
 	}
 	if err := pw.Stop(); err != nil {
-		return "", errors.New(fmt.Sprintf("Couldn't stop headless browser: %v", err))
+		return nil, errors.New(fmt.Sprintf("Couldn't stop headless browser: %v", err))
 	}
 
-	return sessionToken, nil
+	return sessionCookie, nil
 }
 
 func launchBrowser(pw *playwright.Playwright, url string, headless bool) (playwright.BrowserContext, playwright.Page, error) {
@@ -90,8 +92,8 @@ func launchBrowser(pw *playwright.Playwright, url string, headless bool) (playwr
 }
 
 type Result struct {
-	Error        error
-	SessionToken string
+	Error   error
+	Cookies []*playwright.BrowserContextCookiesResult
 }
 
 func logIn(pw *playwright.Playwright) <-chan Result {
@@ -120,7 +122,7 @@ func logIn(pw *playwright.Playwright) <-chan Result {
 
 		lock.Lock()
 
-		sessionToken, err := getSessionCookie(browser)
+		cookies, err := getSessionCookie(browser)
 		if err != nil {
 			r <- Result{Error: errors.New(fmt.Sprintf("Couldn't get session token: %v", err))}
 			return
@@ -131,29 +133,17 @@ func logIn(pw *playwright.Playwright) <-chan Result {
 			return
 		}
 
-		r <- Result{SessionToken: sessionToken}
+		r <- Result{Cookies: cookies}
 	}()
 
 	return r
 }
 
-func getSessionCookie(browser playwright.BrowserContext) (string, error) {
-	cookies, err := browser.Cookies("https://chat.openai.com/")
+func getSessionCookie(browser playwright.BrowserContext) ([]*playwright.BrowserContextCookiesResult, error) {
+	cookies, err := browser.Cookies()
 	if err != nil {
-		return "", errors.New(fmt.Sprintf("Couldn't get cookies: %v", err))
+		return nil, errors.New(fmt.Sprintf("Couldn't get cookies: %v", err))
 	}
 
-	var sessionToken string
-	for _, cookie := range cookies {
-		if cookie.Name == "__Secure-next-auth.session-token" {
-			sessionToken = cookie.Value
-			break
-		}
-	}
-
-	if sessionToken == "" {
-		return "", errors.New(fmt.Sprintf("Couldn't get session token"))
-	}
-
-	return sessionToken, nil
+	return cookies, nil
 }

@@ -1,17 +1,20 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-
+	"github.com/m1guelpf/chatgpt-telegram/src/session"
+	"github.com/playwright-community/playwright-go"
 	"github.com/spf13/viper"
+	"os"
+	"strings"
 )
 
 type Config struct {
 	v *viper.Viper
 
-	OpenAISession string
+	Cookies []session.Cookie
 }
 
 // LoadOrCreatePersistentConfig uses the default config directory for the current OS
@@ -46,9 +49,49 @@ func LoadOrCreatePersistentConfig() (*Config, error) {
 	return &cfg, nil
 }
 
-func (cfg *Config) SetSessionToken(token string) error {
-	// key must match the struct field name
-	cfg.v.Set("OpenAISession", token)
-	cfg.OpenAISession = token
-	return cfg.v.WriteConfig()
+func (cfg *Config) LoadSessionFromCookie() error {
+	filePath := cfg.v.GetString("COOKIE_FILE")
+	if filePath == "" {
+		return errors.New(fmt.Sprintf("cookie file not found. path: %s", filePath))
+	}
+
+	file, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	var cookies []session.Cookie
+	err = json.Unmarshal(file, &cookies)
+	if err != nil {
+		return err
+	}
+
+	cfg.Cookies = cookies
+
+	return nil
+}
+
+func (cfg *Config) SetSession(results []*playwright.BrowserContextCookiesResult) {
+	cfg.Cookies = []session.Cookie{}
+	for _, r := range results {
+		cfg.Cookies = append(cfg.Cookies, session.Cookie{
+			Domain:   r.Domain,
+			HttpOnly: r.HttpOnly,
+			Expires:  r.Expires,
+			Value:    r.Value,
+			SameSite: string(r.SameSite),
+			Secure:   r.Secure,
+			Name:     r.Name,
+			Path:     r.Path,
+		})
+	}
+}
+
+func (cfg *Config) GetCookiesAsString() string {
+	var cookieStrings []string
+	for _, cookie := range cfg.Cookies {
+		cookieStrings = append(cookieStrings, cookie.GetCookieAsString())
+	}
+
+	return strings.Join(cookieStrings, ";")
 }

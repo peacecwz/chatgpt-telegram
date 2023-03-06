@@ -22,7 +22,7 @@ type Conversation struct {
 }
 
 type ChatGPT struct {
-	SessionToken   string
+	SessionCookies string
 	AccessTokenMap expirymap.ExpiryMap
 	conversations  map[int64]Conversation
 }
@@ -51,7 +51,7 @@ type ChatResponse struct {
 func Init(config *config.Config) *ChatGPT {
 	return &ChatGPT{
 		AccessTokenMap: expirymap.New(),
-		SessionToken:   config.OpenAISession,
+		SessionCookies: config.GetCookiesAsString(),
 		conversations:  make(map[int64]Conversation),
 	}
 }
@@ -81,6 +81,7 @@ func (c *ChatGPT) SendMessage(message string, tgChatID int64) (chan ChatResponse
 	client.Headers = map[string]string{
 		"User-Agent":    USER_AGENT,
 		"Authorization": fmt.Sprintf("Bearer %s", accessToken),
+		"Cookie":        c.SessionCookies,
 	}
 
 	convo := c.conversations[tgChatID]
@@ -134,7 +135,7 @@ func (c *ChatGPT) refreshAccessToken() (string, error) {
 	}
 
 	req.Header.Set("User-Agent", USER_AGENT)
-	req.Header.Set("Cookie", fmt.Sprintf("__Secure-next-auth.session-token=%s", c.SessionToken))
+	req.Header.Set("Cookie", c.SessionCookies)
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {

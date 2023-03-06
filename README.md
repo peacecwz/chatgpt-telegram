@@ -5,14 +5,41 @@
 Go CLI to fuels a Telegram bot that lets you interact with [ChatGPT](https://openai.com/blog/chatgpt/), a large language model trained by OpenAI.
 
 ## Installation
-Download the file corresponding to your OS in the [releases page](https://github.com/m1guelpf/chatgpt-telegram/releases/latest). 
-- `chatgpt-telegram-Darwin-amd64`: macOS (Intel)
-- `chatgpt-telegram-Darwin-arm64`: macOS (M1)
-- `chatgpt-telegram-Linux-amd64`: Linux
-- `chatgpt-telegram-Linux-arm64`: Linux (ARM)
-- `chatgpt-telegram-Win-amd64`: Windows
 
-After you download the file, extract it into a folder and open the `env.example` file with a text editor and fill in your credentials. 
+Before the installation. You should export `https://chat.openai.com` on your browser. You should export cookies as JSON for bypassing Cloudflare. You can use `https://chrome.google.com/webstore/detail/%E3%82%AF%E3%83%83%E3%82%AD%E3%83%BCjson%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E5%87%BA%E5%8A%9B-for-puppet/nmckokihipjgplolmcmjakknndddifde` extension or also you can copy-paste from Chrome DevTools like below structure
+
+```json
+
+[
+  {
+    "name": "cookie-name",
+    "value": "value",
+    "domain": ".openai.com",
+    "path": "/",
+    "expires": 1701377088, // timestamp format
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  ...
+]
+
+```
+
+Save as json file
+
+Clone the project
+
+```bash
+
+git clone https://github.com/peacecwz/chatgpt-telegram
+
+```
+
+Move cookies json file into repository
+
+
+After you clone the project, open the `env.example` file with a text editor and fill in your credentials. 
 - `TELEGRAM_TOKEN`: Your Telegram Bot token
   - Follow [this guide](https://core.telegram.org/bots/tutorial#obtain-your-bot-token) to create a bot and get the token.
 - `TELEGRAM_ID` (Optional): Your Telegram User ID
@@ -21,6 +48,7 @@ After you download the file, extract it into a folder and open the `env.example`
   - Multiple IDs can be provided, separated by commas.
 - `EDIT_WAIT_SECONDS` (Optional): Amount of seconds to wait between edits
   - This is set to `1` by default, but you can increase if you start getting a lot of `Too Many Requests` errors.
+- `COOKIE_FILE` (Required): Give path of exported cookie file
 - Save the file, and rename it to `.env`.
 > **Note** Make sure you rename the file to _exactly_ `.env`! The program won't work otherwise.
 
@@ -42,30 +70,23 @@ services:
     image: ghcr.io/m1guelpf/chatgpt-telegram
     container_name: chatgpt-telegram
     volumes:
-      # your ".config" local folder must include a "chatgpt.json" file
-      - .config/:/root/.config
+      # your "cookies.json" will move into container
+      - cookies.json/:/root/cookies.json
     environment:
       - TELEGRAM_ID=
       - TELEGRAM_TOKEN=
+      - COOKIE_FILE=cookies.json
 ```
 
 > **Note** The docker setup is optimized for the Browserless authentication mechanism, described below. Make sure you update the `.config/chatgpt.json` file in this repo with your session token before running.
 
 ## Authentication
 
+If you include cookies.json file into .env. It'll be running automatically
+
 By default, the program will launch a browser for you to sign into your account, and close it once you're signed in. If this setup doesn't work for you (there are issues with the browser starting, you want to run this in a computer with no screen, etc.), you can manually extract your session from your browser instead.
 
-To do this, first sign in to ChatGPT on your browser, then open the Developer Tools (right click anywhere in the page, then click "Inspect"), click on the Application tab and then on the Cookies section, and copy the value of the `__Secure-next-auth.session-token` cookie.
-
-You will then have to create a config file in the following location depending on your OS (replace `YOUR_USERNAME_HERE` with your username:
-
-- `~/.config/chatgpt.json`: Linux
-- `C:\Users\YOUR_USERNAME_HERE\AppData\Roaming\chatgpt.json`: Windows
-- `/Users/YOUR_USERNAME_HERE/Library/Application Support/chatgpt.json`: macOS
-
 > **Note** If you have already run the program, the file should exist but be empty. If it doesn't exist yet, you can either run the program or manually create it.
-
-Finally, add your cookie to the file and save it. It should look like this: `{ "openaisession": "YOUR_COOKIE_HERE" }`.
 
 ## License
 

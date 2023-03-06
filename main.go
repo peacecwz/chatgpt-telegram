@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/m1guelpf/chatgpt-telegram/src/session"
 	"log"
 	"os"
 	"os/signal"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/m1guelpf/chatgpt-telegram/src/chatgpt"
 	"github.com/m1guelpf/chatgpt-telegram/src/config"
-	"github.com/m1guelpf/chatgpt-telegram/src/session"
 	"github.com/m1guelpf/chatgpt-telegram/src/tgbot"
 )
 
@@ -20,15 +20,14 @@ func main() {
 		log.Fatalf("Couldn't load config: %v", err)
 	}
 
-	if persistentConfig.OpenAISession == "" {
-		token, err := session.GetSession()
+	err = persistentConfig.LoadSessionFromCookie()
+	if err != nil {
+		cookieSession, err := session.GetSession()
 		if err != nil {
-			log.Fatalf("Couldn't get OpenAI session: %v", err)
+			log.Fatalf("Couldn't get OpenAI cookieSession: %v", err)
 		}
 
-		if err = persistentConfig.SetSessionToken(token); err != nil {
-			log.Fatalf("Couldn't save OpenAI session: %v", err)
-		}
+		persistentConfig.SetSession(cookieSession)
 	}
 
 	chatGPT := chatgpt.Init(persistentConfig)

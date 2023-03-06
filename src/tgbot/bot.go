@@ -76,7 +76,11 @@ func (b *Bot) SendTyping(chatID int64) {
 func (b *Bot) SendAsLiveOutput(chatID int64, replyTo int, feed chan chatgpt.ChatResponse) {
 	debouncedType := ratelimit.Debounce(10*time.Second, func() { b.SendTyping(chatID) })
 	debouncedEdit := ratelimit.DebounceWithArgs(b.editInterval, func(text interface{}, messageId interface{}) {
-		if err := b.SendEdit(chatID, messageId.(int), text.(string)); err != nil {
+		message := text.(string)
+		if message == "" {
+			return
+		}
+		if err := b.SendEdit(chatID, messageId.(int), message); err != nil {
 			log.Printf("Couldn't edit message: %v", err)
 		}
 	})
@@ -96,7 +100,7 @@ pollResponse:
 
 			lastResp = response.Message
 
-			if message.MessageID == 0 {
+			if message.MessageID == 0 && lastResp != "" {
 				var err error
 				if message, err = b.Send(chatID, replyTo, lastResp); err != nil {
 					log.Fatalf("Couldn't send message: %v", err)
