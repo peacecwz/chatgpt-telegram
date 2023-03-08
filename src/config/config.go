@@ -21,15 +21,10 @@ type Config struct {
 // to load or create a config file named "chatgpt.json"
 func LoadOrCreatePersistentConfig() (*Config, error) {
 	v := viper.New()
-	v.SetConfigType("json")
-	v.SetConfigName("chatgpt")
+	v.AutomaticEnv()
 
 	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			if err := v.SafeWriteConfig(); err != nil {
-				return nil, errors.New(fmt.Sprintf("Couldn't create config file: %v", err))
-			}
-		} else {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return nil, errors.New(fmt.Sprintf("Couldn't read config file: %v", err))
 		}
 	}
