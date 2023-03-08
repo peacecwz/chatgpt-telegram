@@ -20,14 +20,9 @@ type Config struct {
 // LoadOrCreatePersistentConfig uses the default config directory for the current OS
 // to load or create a config file named "chatgpt.json"
 func LoadOrCreatePersistentConfig() (*Config, error) {
-	configPath, err := os.UserConfigDir()
-	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Couldn't get user config dir: %v", err))
-	}
 	v := viper.New()
 	v.SetConfigType("json")
 	v.SetConfigName("chatgpt")
-	v.AddConfigPath(configPath)
 
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
@@ -40,7 +35,7 @@ func LoadOrCreatePersistentConfig() (*Config, error) {
 	}
 
 	var cfg Config
-	err = v.Unmarshal(&cfg)
+	err := v.Unmarshal(&cfg)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Error parsing config: %v", err))
 	}
